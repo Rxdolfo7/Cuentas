@@ -148,6 +148,25 @@ nav.tabs .add svg{width:26px;height:26px;stroke-width:2.4}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom, 0px));background:var(--ink);color:var(--bg);
   padding:9px 16px;border-radius:999px;font-size:14px;z-index:40}
 @media (prefers-reduced-motion: no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(30px);opacity:.6}}}
+h3.sec{font-family:var(--display);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:18px 0 0;padding-top:4px}
+h3.sec:first-child{margin-top:0}
+.debt .meta{display:flex;flex-wrap:wrap;gap:4px 8px;font-size:13.5px;color:var(--muted);align-items:center}
+.debt .meta .sep{opacity:.5}
+.card-tag{background:var(--soft);color:var(--ink);border-radius:6px;padding:2px 8px;font-weight:500}
+.debt .nota{margin:0;font-size:13.5px;color:var(--ink);background:var(--soft);border-radius:8px;padding:8px 10px;white-space:pre-wrap}
+.mes{font-size:12.5px;font-weight:600;margin-right:auto}
+.mes.ok{color:var(--in)} .mes.no{color:var(--out)}
+.debt details{border-top:1px dashed var(--line);padding-top:8px}
+.debt summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:14px;list-style:none;padding:4px 0}
+.debt summary::-webkit-details-marker{display:none}
+.debt summary::before{content:"▸ ";} .debt details[open] summary::before{content:"▾ ";}
+.debt .edit{display:flex;flex-direction:column;gap:10px;padding-top:8px}
+.debt .edit>label{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.debt .edit input[type=text],.debt .edit textarea,.debt .edit select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px;width:100%;min-width:0;font-size:16px}
+.debt .edit textarea{min-height:60px;font-family:var(--body)}
+.debt .grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.debt .grid label select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px;width:100%;font-size:16px}
+#dTipo{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;width:100%;font-size:16px}
 </style>
 </head>
 <body>
@@ -230,15 +249,15 @@ nav.tabs .add svg{width:26px;height:26px;stroke-width:2.4}
     <div class="balance" style="background:var(--ink);color:var(--bg)">
       <div><div class="label">Deuda pendiente total</div><div class="big num" id="dTotal"></div><div class="rate" id="dRate"></div></div>
       <div class="split">
-        <div style="background:color-mix(in srgb, var(--bg) 14%, transparent)"><span class="label">Cuotas al mes</span><span class="num" id="dCuotas"></span></div>
-        <div style="background:color-mix(in srgb, var(--bg) 14%, transparent)"><span class="label">Sin arreglar</span><span class="num" id="dPend"></span></div>
+        <div style="background:color-mix(in srgb, var(--bg) 14%, transparent)"><span class="label">Pagos del mes</span><span class="num" id="dCuotas"></span></div>
+        <div style="background:color-mix(in srgb, var(--bg) 14%, transparent)"><span class="label">Te queda libre</span><span class="num" id="dPend"></span></div>
       </div>
     </div>
     <div class="panel"><div id="debts"></div></div>
     <section class="panel block">
-      <h2>Agregar deuda</h2>
-      <form id="debtForm" class="inline"><input type="text" id="dName" placeholder="Nombre de la entidad" aria-label="Nombre de la entidad" required><button class="btn" type="submit">Agregar</button></form>
-      <p class="note">Al registrar un pago se crea un gasto en la categoría Deudas y se descuenta del saldo pendiente.</p>
+      <h2>Agregar</h2>
+      <form id="debtForm" class="block" style="gap:10px"><select id="dTipo" aria-label="Tipo"><option value="deuda">Deuda</option><option value="fijo">Pago fijo mensual</option><option value="ingreso">Ingreso fijo</option></select><div class="inline"><input type="text" id="dName" placeholder="Nombre (ej: Banco, préstamo, sueldo)" aria-label="Nombre" required><button class="btn" type="submit">Agregar</button></div></form>
+      <p class="note">Al registrar un pago se crea el gasto del mes y, en las deudas, se descuenta del saldo pendiente. "Te queda libre" es tu ingreso fijo menos los pagos del mes.</p>
     </section>
   </div>
 

@@ -1,6 +1,6 @@
 // Guarda la app en el teléfono para que abra sin internet.
 // Cuando cambies algún archivo, sube el número de VERSION para que el iPhone descargue la nueva versión.
-const VERSION = 'cc-v1';
+const VERSION = 'cc-v2';
 const FILES = ['./', './index.html', './app.js', './manifest.webmanifest', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

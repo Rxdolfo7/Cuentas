@@ -1,5 +1,5 @@
 
-const CATS={gasto:['Comida','Transporte','Hogar','Servicios','Salud','Ocio','Educación','Ropa','Deudas','Otros'],ingreso:['Sueldo','Pensión','Extra','Regalo','Otros']};
+const CATS={gasto:['Comida','Transporte','Hogar','Servicios','Salud','Ocio','Educación','Ropa','Deudas','Pagos fijos','Otros'],ingreso:['Sueldo','Pensión','Extra','Regalo','Otros']};
 const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const COLS=['tx','goals','debts'];
 const $=id=>document.getElementById(id);
@@ -101,40 +101,99 @@ function renderMetas(){
 }
 
 const ST={aldia:'Al día',repactada:'Repactada',pendiente:'Sin arreglar'};
+const TIPOS={deuda:'Deudas',fijo:'Pagos fijos',ingreso:'Ingresos fijos'};
+const tipoDe=d=>d.tipo||'deuda';
+const openDebts=new Set();
 function debtPaid(id){return S.tx.filter(t=>t.debtId===id).reduce((a,t)=>a+t.amount,0)}
-function renderDeudas(){
-  const debts=[...S.debts].sort((a,b)=>(a.orden??99)-(b.orden??99));
-  let tot=0,cuo=0,pend=0;
-  for(const d of debts){tot+=Math.max(0,(d.total||0)-debtPaid(d.id));if(d.status!=='pendiente')cuo+=d.cuota||0;if(d.status==='pendiente')pend++}
-  $('dTotal').textContent=clp(tot);$('dCuotas').textContent=clp(cuo);$('dPend').textContent=pend+' de '+debts.length;
-  const ing=totals(thisMonth).i;
-  $('dRate').textContent=ing&&cuo?`Tus cuotas son el ${Math.round(cuo/ing*100)}% de tus ingresos de este mes`:'Registra tus ingresos del mes para ver cuánto se va en cuotas';
-  if(!ready){$('debts').innerHTML=loadingRow;return}
-  $('debts').innerHTML=debts.length?debts.map(d=>{const paid=debtPaid(d.id),rest=Math.max(0,(d.total||0)-paid),p=d.total?Math.min(100,paid/d.total*100):0;
-    return `<div class="debt" data-debt="${d.id}">
-      <div class="row-head"><h2>${esc(d.name)}</h2><span class="pill ${d.status}">${ST[d.status]||d.status}</span></div>
-      ${d.total?`<div class="goal" style="padding:0;border:0"><div class="prog"><i style="width:${p}%"></i></div><div class="nums"><span class="num">Pagado ${clp(paid)}</span><span class="num">Falta ${clp(rest)}</span></div></div>`:''}
-      <div class="grid">
-        <label>Debo en total<input type="text" class="num money" inputmode="numeric" id="dt-${d.id}" data-k="total" value="${d.total?clp(d.total):''}" placeholder="$0"></label>
-        <label>Cuota mensual<input type="text" class="num money" inputmode="numeric" id="dc-${d.id}" data-k="cuota" value="${d.cuota?clp(d.cuota):''}" placeholder="$0"></label>
-        <label>Día de pago<input type="text" class="num" inputmode="numeric" id="dd-${d.id}" data-k="dia" value="${d.dia||''}" placeholder="1-31"></label>
-      </div>
-      <div class="actions">
-        <select id="ds-${d.id}" data-k="status" aria-label="Estado de la deuda">${Object.entries(ST).map(([k,v])=>`<option value="${k}" ${k===d.status?'selected':''}>${v}</option>`).join('')}</select>
-        <button class="btn" type="button" data-pay="${d.id}">Registrar pago${d.cuota?' de '+clp(d.cuota):''}</button>
-        <button class="del" type="button" data-deldebt="${d.id}">Quitar</button>
-      </div></div>`}).join(''):'<div class="empty">No tienes deudas registradas.</div>';
+function debtCount(id){return S.tx.filter(t=>t.debtId===id).length}
+function doneThisMonth(id){return S.tx.some(t=>t.debtId===id&&t.date&&t.date.slice(0,7)===thisMonth)}
+const diaTxt=n=>!n?'':n>=31?'Fin de mes':'Día '+n;
+function activo(d){return tipoDe(d)==='fijo'||(tipoDe(d)==='deuda'&&d.status!=='pendiente')}
+const sortedDebts=()=>[...S.debts].sort((a,b)=>(a.orden??99)-(b.orden??99));
+function renderDeudasSummary(){
+  const all=sortedDebts();
+  let tot=0,pagos=0,falta=0,ingFijo=0,pend=0;
+  for(const d of all){
+    const t=tipoDe(d);
+    if(t==='ingreso'){ingFijo+=d.cuota||0;continue}
+    if(t==='deuda'){tot+=Math.max(0,(d.total||0)-debtPaid(d.id));if(d.status==='pendiente')pend++}
+    if(activo(d)){pagos+=d.cuota||0;if(!doneThisMonth(d.id))falta+=d.cuota||0}
+  }
+  $('dTotal').textContent=clp(tot);$('dCuotas').textContent=clp(pagos);
+  const libre=ingFijo-pagos;
+  $('dPend').textContent=ingFijo?(libre<0?'−':'')+clp(Math.abs(libre)):'—';
+  $('dRate').textContent=`Falta pagar este mes: ${clp(falta)}`+(pend?` · Sin arreglar: ${pend} deuda${pend>1?'s':''}`:'');
 }
+function renderDeudas(){
+  renderDeudasSummary();
+  const all=sortedDebts();
+  const sec=(t)=>{const list=all.filter(d=>tipoDe(d)===t);if(!list.length)return'';
+    return `<h3 class="sec">${TIPOS[t]}</h3>`+list.map(card).join('')};
+  $('debts').innerHTML=all.length?sec('deuda')+sec('fijo')+sec('ingreso'):'<div class="empty">No tienes deudas ni pagos registrados.</div>';
+}
+function card(d){
+  const t=tipoDe(d),paid=debtPaid(d.id),n=debtCount(d.id),rest=Math.max(0,(d.total||0)-paid),p=d.total?Math.min(100,paid/d.total*100):0;
+  const done=doneThisMonth(d.id),isIn=t==='ingreso';
+  const pill=t==='deuda'?`<span class="pill ${d.status}">${ST[d.status]||d.status}</span>`:`<span class="pill ${isIn?'aldia':'repactada'}">${isIn?'Ingreso':'Fijo'}</span>`;
+  const meta=[d.tarjeta?`<span class="card-tag">💳 ${esc(d.tarjeta)}</span>`:'',
+    d.cuota?`<span class="num">${clp(d.cuota)}${isIn?'':' / mes'}</span>`:'',
+    d.cuotasTotal?`<span>${Math.min(n,d.cuotasTotal)} de ${d.cuotasTotal} cuotas pagadas</span>`:'',
+    d.dia?`<span>${diaTxt(d.dia)}</span>`:''].filter(Boolean).join('<span class="sep">·</span>');
+  const estadoMes=(t==='deuda'&&d.status==='pendiente')?'':`<span class="mes ${done?'ok':'no'}">${done?(isIn?'Recibido este mes ✓':'Pagado este mes ✓'):(isIn?'Por recibir este mes':'Pendiente este mes')}</span>`;
+  const sel=(k,opts,v)=>`<select id="d${k}-${d.id}" data-k="${k}">${opts.map(([a,b])=>`<option value="${a}" ${String(a)===String(v)?'selected':''}>${b}</option>`).join('')}</select>`;
+  const dias=[[0,'Sin definir'],[31,'Fin de mes']].concat(Array.from({length:30},(_,i)=>[i+1,'Día '+(i+1)]));
+  return `<div class="debt" data-debt="${d.id}">
+    <div class="row-head"><h2>${esc(d.name)}</h2>${pill}</div>
+    ${meta?`<div class="meta">${meta}</div>`:''}
+    ${d.nota?`<p class="nota">${esc(d.nota)}</p>`:''}
+    ${t==='deuda'&&d.total?`<div class="goal" style="padding:0;border:0"><div class="prog"><i style="width:${p}%"></i></div><div class="nums"><span class="num">Pagado ${clp(paid)} de ${clp(d.total)}</span><span class="num">Falta ${clp(rest)}</span></div></div>`:''}
+    <div class="actions">
+      ${estadoMes}
+      <button class="btn" type="button" data-pay="${d.id}">${isIn?'Registrar ingreso':'Registrar pago'}${d.cuota?' de '+clp(d.cuota):''}</button>
+    </div>
+    <details data-open="${d.id}" ${openDebts.has(d.id)?'open':''}><summary>Editar detalles</summary>
+      <div class="edit">
+        <label>Nombre<input type="text" id="dn-${d.id}" data-k="name" value="${esc(d.name)}"></label>
+        ${isIn?'':`<label>Tarjeta o producto<input type="text" id="dk-${d.id}" data-k="tarjeta" value="${esc(d.tarjeta||'')}" placeholder="Ej: Tarjeta CMR, Visa terminada en 1234" maxlength="60"></label>`}
+        <div class="grid">
+          ${t==='deuda'?`<label>Debo en total<input type="text" class="num money" inputmode="numeric" id="dt-${d.id}" data-k="total" value="${d.total?clp(d.total):''}" placeholder="$0"></label>`:''}
+          <label>${isIn?'Monto':t==='fijo'?'Monto mensual':'Cuota mensual'}<input type="text" class="num money" inputmode="numeric" id="dc-${d.id}" data-k="cuota" value="${d.cuota?clp(d.cuota):''}" placeholder="$0"></label>
+          ${t==='deuda'?`<label>N° de cuotas<input type="text" class="num" inputmode="numeric" id="dq-${d.id}" data-k="cuotasTotal" value="${d.cuotasTotal||''}" placeholder="—"></label>`:''}
+        </div>
+        <div class="grid two">
+          <label>${isIn?'Día que llega':'Día de pago'}${sel('dia',dias,d.dia||0)}</label>
+          ${t==='deuda'?`<label>Estado${sel('status',Object.entries(ST),d.status)}</label>`:''}
+        </div>
+        <label>Detalle<textarea id="dx-${d.id}" data-k="nota" maxlength="300" placeholder="Ej: repactada en 6 cuotas, primera en octubre">${esc(d.nota||'')}</textarea></label>
+        <button class="del" type="button" data-deldebt="${d.id}">Quitar ${isIn?'este ingreso':'esta '+(t==='fijo'?'pago fijo':'deuda')}</button>
+      </div>
+    </details>
+  </div>`;
+}
+$('debts').addEventListener('toggle',e=>{const d=e.target.closest('details[data-open]');if(!d)return;if(d.open)openDebts.add(d.dataset.open);else{openDebts.delete(d.dataset.open);renderDeudas()}},true);
 $('debts').addEventListener('change',e=>{const el=e.target,k=el.dataset.k;if(!k)return;const id=el.closest('[data-debt]').dataset.debt;
-  const v=k==='status'?el.value:k==='dia'?Math.min(31,parseMoney(el.value)):parseMoney(el.value);patch('debts',id,{[k]:v})});
+  let v;
+  if(k==='status'||k==='tarjeta'||k==='nota')v=el.value.trim();
+  else if(k==='name'){v=el.value.trim();if(!v){toast('El nombre no puede quedar vacío');renderDeudas();return}}
+  else if(k==='dia')v=Number(el.value)||0;
+  else if(k==='cuotasTotal')v=Math.min(360,parseMoney(el.value));
+  else v=parseMoney(el.value);
+  // Guarda sin redibujar la tarjeta, para no cerrar el teclado al pasar al siguiente campo.
+  const cur=S.debts.find(x=>x.id===id);if(!cur)return;cur[k]=v;save();renderDeudasSummary();
+  if(k==='status'||k==='dia')renderDeudas()});
 $('debts').addEventListener('click',e=>{
   const p=e.target.closest('[data-pay]');
-  if(p){const d=S.debts.find(x=>x.id===p.dataset.pay);if(!d.cuota){toast('Primero ingresa la cuota mensual');return}
-    put('tx',{id:uid(),type:'gasto',amount:d.cuota,cat:'Deudas',debtId:d.id,date:todayISO,note:'Pago cuota '+d.name});toast('Pago a '+d.name+' registrado');return}
+  if(p){const d=S.debts.find(x=>x.id===p.dataset.pay);if(!d.cuota){toast('Primero ingresa el monto en "Editar detalles"');return}
+    const t=tipoDe(d);
+    if(t==='ingreso')put('tx',{id:uid(),type:'ingreso',amount:d.cuota,cat:d.cat||'Sueldo',debtId:d.id,date:todayISO,note:d.name});
+    else put('tx',{id:uid(),type:'gasto',amount:d.cuota,cat:t==='fijo'?'Pagos fijos':'Deudas',debtId:d.id,date:todayISO,note:(t==='fijo'?'Pago ':'Pago cuota ')+d.name});
+    toast((t==='ingreso'?'Ingreso de ':'Pago a ')+d.name+' registrado');return}
   const x=e.target.closest('[data-deldebt]');
-  if(x){if(x.classList.contains('arm'))remove('debts',x.dataset.deldebt);else{x.classList.add('arm');x.textContent='¿Quitar?'}}
+  if(x){if(x.classList.contains('arm'))remove('debts',x.dataset.deldebt);else{x.classList.add('arm');x.textContent='Toca de nuevo para quitar'}}
 });
-$('debtForm').onsubmit=e=>{e.preventDefault();const n=$('dName').value.trim();if(!n)return;put('debts',{id:uid(),name:n,status:'pendiente',total:0,cuota:0,dia:0,orden:S.debts.length});$('dName').value=''};
+$('debtForm').onsubmit=e=>{e.preventDefault();const n=$('dName').value.trim();if(!n)return;const tipo=$('dTipo').value;
+  const id=uid();put('debts',{id,name:n,tipo,status:tipo==='deuda'?'pendiente':'aldia',total:0,cuota:0,dia:0,tarjeta:'',nota:'',cuotasTotal:0,orden:S.debts.length});
+  openDebts.add(id);$('dName').value='';renderDeudas();toast('Agregado. Completa los datos en "Editar detalles"')};
 
 function render(){
   $('monthLabel').textContent=monthLabel(month);
@@ -189,7 +248,8 @@ $('copyBk').onclick=()=>{const txt=JSON.stringify(S);const out=$('bkOut');out.va
   const fb=()=>{out.hidden=false;out.focus();out.select();toast('Selecciona y copia el texto')};
   try{navigator.clipboard.writeText(txt).then(()=>{markBackup();toast('Respaldo copiado. Pégalo en Notas o en un correo.')},fb)}catch(e){fb()}};
 function restoreFrom(text){
-  let d;try{d=JSON.parse(text);if(!d||!Array.isArray(d.tx))throw 0}catch(e){toast('Ese contenido no es un respaldo válido');return false}
+  let d;try{d=JSON.parse(text);if(!d||!(Array.isArray(d.tx)||(d.soloDeudas&&Array.isArray(d.debts))))throw 0}catch(e){toast('Ese contenido no es un respaldo válido');return false}
+  if(d.soloDeudas){S.debts=d.debts.filter(x=>x&&x.id);save();view='deudas';render();toast('Deudas y pagos actualizados. Tus movimientos no se tocaron.');return true}
   const n={tx:[],goals:[],debts:[]};
   for(const c of COLS)for(const it of (Array.isArray(d[c])?d[c]:[]))if(it&&it.id&&!it.ex)n[c].push(it);
   S=n;save();view='inicio';month=thisMonth;render();toast('Datos restaurados');return true;
